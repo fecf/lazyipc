@@ -8,8 +8,10 @@ namespace lazyipc {
 class mmap {
  public:
   mmap() = delete;
-  mmap(const char* name, uint32_t size);
+  mmap(const char* name, uint32_t file_size = 0);
   ~mmap();
+
+  operator bool() const { return file_size_ > 0; }
 
   void* view() const;
   uint32_t file_size() const;

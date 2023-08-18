@@ -35,25 +35,35 @@ inline int64_t store_relaxed(int64_t& target, int64_t value) {
 
 }  // namespace
 
-mmap::mmap(const char* name, uint32_t file_size) : file_size_(file_size) {
+mmap::mmap(const char* name, uint32_t file_size)
+    : file_size_(), handle_(), view_(), owner_() {
   assert(name != nullptr);
-  assert(file_size > 0);
 
-  handle_ = (void*)::CreateFileMapping(
-      INVALID_HANDLE_VALUE, NULL, PAGE_EXECUTE_READWRITE, 0, file_size, name);
-  if (handle_ == INVALID_HANDLE_VALUE) {
-    throw std::runtime_error("failed to CreateFileMapping().");
+  handle_ = ::OpenFileMapping(FILE_MAP_ALL_ACCESS, FALSE, name);
+  if (handle_ == NULL) {
+    handle_ = (void*)::CreateFileMapping(
+        INVALID_HANDLE_VALUE, NULL, PAGE_EXECUTE_READWRITE, 0, file_size, name);
+    if (handle_ == INVALID_HANDLE_VALUE) {
+      throw std::runtime_error("failed to CreateFileMapping().");
+    }
+    owner_ = true;
+  } else {
+    owner_ = false;
   }
-  DWORD err = ::GetLastError();
 
   view_ = ::MapViewOfFile(handle_, FILE_MAP_ALL_ACCESS, 0, 0, 0);
   if (view_ == nullptr) {
     throw std::runtime_error("failed to MapViewOfFile().");
   }
 
-  owner_ = (err != ERROR_ALREADY_EXISTS);
+  MEMORY_BASIC_INFORMATION mbi{};
+  if (::VirtualQuery(view_, &mbi, sizeof(mbi)) == 0) {
+    throw std::runtime_error("failed to VirtualQuery().");
+  }
+  file_size_ = (uint32_t)mbi.RegionSize;
+
   if (owner_) {
-    ::memset(view_, 0x0, file_size);
+    ::memset(view_, 0x0, file_size_);
   }
 }
 
